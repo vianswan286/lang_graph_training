@@ -10,9 +10,9 @@ load_dotenv()
 class AgentState(TypedDict):
     messages: List[Union[HumanMessage, AIMessage]]
     
-llm = ChatOpenAI(                     #   actually using OpenRouterAPI
+llm = ChatOpenAI(
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1",
+    base_url="https://openrouter.ai/api/v1",         #   actually using OpenRouterAPI
     model="mistralai/mistral-7b-instruct-v0.2"
 )
 
