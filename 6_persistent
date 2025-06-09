@@ -130,7 +130,7 @@ graph.add_edge("tools", "agent")
 
 app = graph.compile()
 
-# show graph
+#//show graph
 # import matplotlib.pyplot as plt
 # import matplotlib.image as mpimg
 # import io
@@ -140,7 +140,7 @@ app = graph.compile()
 # plt.imshow(img)
 # plt.axis('off')
 # plt.show()
-# show graph
+#// show graph
 
 history = []
 
