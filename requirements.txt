@@ -1,1 +1,10 @@
 langgraph>=0.1.0
+langchain-core
+langchain-openai
+langchain-chroma
+langchain-huggingface
+langchain-community
+chromadb
+python-dotenv
+matplotlib
+pypdf2
