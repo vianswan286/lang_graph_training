@@ -1,0 +1,151 @@
+from dotenv import load_dotenv
+import os
+from typing import Sequence, TypedDict, List, Union, Annotated
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
+from langchain_core.tools import tool
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+import sqlite3
+from datetime import datetime
+
+load_dotenv()
+
+db_path = os.getenv("SQLITE_FILE")   # global variable
+
+class AgentState(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+
+@tool
+def add_name(name: str) -> str:
+    """
+    To list of chat members adds name of new one for example 'gamer543' and returns result: success or fail
+    if user asks you to add someonte - add him
+    """
+    print(f"[TOOL] add_name request: name={name}")
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        # Use current time for 'added_time'
+        added_time = datetime.now().strftime("%H:%M:%S")
+        cursor.execute("INSERT INTO USERS (name, added_time) VALUES (?, ?)", (name, added_time))
+        conn.commit()
+        conn.close()
+        result = f"success, added {name} to chat list at {added_time}"
+        print(f"[TOOL] add_name result: {result}")
+        return result
+    except Exception as e:
+        result = f"Error: {e}"
+        print(f"[TOOL] add_name result: {result}")
+        return result
+
+@tool
+def list_all(name: str) -> str:
+    """
+    Returns a list of all chat members and the time they were added.
+    """
+    print(f"[TOOL] list_all request: name={name}")
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, added_time FROM USERS")
+        rows = cursor.fetchall()
+        conn.close()
+        if not rows:
+            result = "No chat members found."
+        else:
+            result = "\n".join([f"{row[0]} (added at {row[1]})" for row in rows])
+        print(f"[TOOL] list_all result: {result}")
+        return result
+    except Exception as e:
+        result = f"Error: {e}"
+        print(f"[TOOL] list_all result: {result}")
+        return result
+
+@tool
+def check_user(name: str) -> str:
+    """
+    Checks if the given user is in the chat.
+    """
+    print(f"[TOOL] check_user request: name={name}")
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM USERS WHERE name = ?", (name,))
+        result = cursor.fetchone()
+        conn.close()
+        if result:
+            output = f"User '{name}' is in the chat."
+        else:
+            output = f"User '{name}' is NOT in the chat."
+        print(f"[TOOL] check_user result: {output}")
+        return output
+    except Exception as e:
+        output = f"Error: {e}"
+        print(f"[TOOL] check_user result: {output}")
+        return output
+
+tools = [add_name, list_all, check_user]
+
+llm = ChatOpenAI(
+    openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1",
+    model_name="openai/gpt-4-turbo-preview"
+).bind_tools(tools)
+
+
+def call_model(state: AgentState) -> AgentState:
+    system_prompt = SystemMessage("""You are an chat users control AI. Your user is admin and he cat tell you to add, users or to check users that are in the
+    chat. You use instrumetns where it is possible even if you think that you know the answer withour them because your knowledge can be obsolete""")
+    response = llm.invoke([system_prompt] + state["messages"])
+    if response.content:
+        print("AI:", response.content)
+    return {"messages": [response]}
+
+def should_continue(state: AgentState) -> str:
+    last_message = state["messages"][-1]
+    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+        return "continue"
+    return "end"
+
+graph = StateGraph(AgentState)
+graph.add_node("agent", call_model)
+
+tool_node = ToolNode(tools=tools)
+graph.add_node("tools", tool_node)
+
+graph.add_edge(START, "agent")
+graph.add_conditional_edges(
+    "agent",
+    should_continue,
+    {
+        "continue": "tools",
+        "end": END
+    }
+)
+
+graph.add_edge("tools", "agent")
+
+
+app = graph.compile()
+
+# show graph
+# import matplotlib.pyplot as plt
+# import matplotlib.image as mpimg
+# import io
+
+# img_bytes = app.get_graph().draw_mermaid_png()
+# img = mpimg.imread(io.BytesIO(img_bytes), format='png')
+# plt.imshow(img)
+# plt.axis('off')
+# plt.show()
+# show graph
+
+history = []
+
+while True:
+    user_input = input("Enter: ")
+    history.append(HumanMessage(content=user_input))
+    result = app.invoke({"messages": history})
+    history = result["messages"]

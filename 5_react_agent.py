@@ -1,4 +1,3 @@
-from ast import Add
 from dotenv import load_dotenv
 import os
 from typing import Sequence, TypedDict, List, Union, Annotated
@@ -71,11 +70,24 @@ graph.add_edge("tools", "agent")
 app = graph.compile()
 
 
+# show graph
+# import matplotlib.pyplot as plt
+# import matplotlib.image as mpimg
+# import io
+
+# img_bytes = app.get_graph().draw_mermaid_png()
+# img = mpimg.imread(io.BytesIO(img_bytes), format='png')
+# plt.imshow(img)
+# plt.axis('off')
+# plt.show()
+# show graph
+
+
 history = []
-user_input = input("Enter: ")
+
 
 while True:
+    user_input = input("Enter: ")
     history.append(HumanMessage(content=user_input))
     result = app.invoke({"messages": history})
     history = result["messages"]
-    user_input = input("Enter: ")
